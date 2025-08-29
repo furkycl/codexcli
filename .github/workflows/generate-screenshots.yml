@@ -1,0 +1,36 @@
+name: Generate Screenshots
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'index.html'
+      - 'scripts/**'
+      - '.github/workflows/generate-screenshots.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Puppeteer
+        run: npm i --prefer-offline --no-audit --no-fund --no-optional puppeteer@^22.13.1
+      - name: Generate screenshots
+        run: node scripts/generate-screenshots.js
+      - name: Commit screenshots
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: update generated screenshots'
+          commit_user_name: github-actions[bot]
+          commit_user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          file_pattern: assets/screenshot-*.png
+

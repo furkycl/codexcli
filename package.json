@@ -1,0 +1,31 @@
+{
+  "name": "codexcli",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/furkycl/codexcli.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/furkycl/codexcli/issues"
+  },
+  "homepage": "https://github.com/furkycl/codexcli#readme",
+  "dependencies": {
+    "openai": "^5.16.0"
+  },
+  "devDependencies": {
+    "puppeteer": "^22.13.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "screenshot": "node scripts/generate-screenshots.js"
+  }
+}

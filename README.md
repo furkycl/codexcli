@@ -1,9 +1,9 @@
 **Generative Art Studio**
-- **Modes:** Flow Field trails and Noise Terrain.
+- **Modes:** Flow Field trails, Noise Terrain, and Orbits (gravity).
 - **Controls:** particles, steps, noise scale, speed, width, fade, background.
 - **Palettes:** curated swatches with instant blending.
 - **Persistence:** settings saved to `localStorage`.
-- **Utilities:** randomize, regenerate, clear, reset, PNG export.
+- **Utilities:** randomize, regenerate, clear, reset, PNG export, high‑res PNG export, shareable URL.
 - **Shortcuts:** Space (animate), R (randomize), G (regenerate), S (save), P (palette), H (help).
 
 **Live Demo**
@@ -24,4 +24,3 @@ The repo includes a workflow that generates real PNG screenshots on push and rep
 **Development**
 - Screenshot generator: `scripts/generate-screenshots.js` (uses Puppeteer in CI).
 - CI will auto-generate and commit PNG screenshots on pushes to `main` that touch UI files.
-

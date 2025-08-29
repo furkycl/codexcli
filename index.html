@@ -39,6 +39,8 @@
         grid-template-areas: "header header" "sidebar main";
         height: 100%;
       }
+      .app.sidebar-hidden { grid-template-columns: 1fr; }
+      .app.sidebar-hidden .sidebar { display: none; }
 
       header {
         grid-area: header;
@@ -123,8 +125,10 @@
       <header>
         <div class="brand"><div class="logo" aria-hidden="true"></div> Generative Art Studio</div>
         <div class="toolbar">
+          <button id="btn-sidebar" class="btn ghost hide-mobile">Sidebar</button>
           <button id="btn-randomize" class="btn">Randomize</button>
           <button id="btn-save" class="btn">Save PNG</button>
+          <button id="btn-save-hd" class="btn">Save Hi-Res</button>
           <button id="btn-help" class="btn ghost hide-mobile">Help</button>
         </div>
       </header>
@@ -136,6 +140,7 @@
             <select id="mode">
               <option value="flow">Flow Field (trails)</option>
               <option value="terrain">Noise Terrain</option>
+              <option value="orbits">Orbits (gravity)</option>
             </select>
           </div>
           <div class="row">
@@ -170,6 +175,7 @@
             <button id="btn-clear" class="btn">Clear</button>
             <button id="btn-regenerate" class="btn">Regenerate</button>
             <button id="btn-reset" class="btn">Reset Defaults</button>
+            <button id="btn-share" class="btn">Copy Link</button>
           </div>
         </div>
       </aside>
@@ -234,6 +240,7 @@
       ];
 
       const $ = (sel) => document.querySelector(sel);
+      const appEl = document.querySelector('.app');
       const canvas = $('#canvas');
       const ctx = canvas.getContext('2d');
       const hud = $('#hud');
@@ -243,7 +250,7 @@
         mode: $('#mode'), animate: $('#animate'), seed: $('#seed'),
         particles: $('#particles'), steps: $('#steps'), scale: $('#scale'), speed: $('#speed'), width: $('#width'), fade: $('#fade'),
         bg: $('#bg'), swatches: $('#swatches'),
-        btnRandomize: $('#btn-randomize'), btnSave: $('#btn-save'), btnHelp: $('#btn-help'), btnClear: $('#btn-clear'), btnRegenerate: $('#btn-regenerate'), btnReset: $('#btn-reset')
+        btnRandomize: $('#btn-randomize'), btnSave: $('#btn-save'), btnSaveHD: $('#btn-save-hd'), btnHelp: $('#btn-help'), btnClear: $('#btn-clear'), btnRegenerate: $('#btn-regenerate'), btnReset: $('#btn-reset'), btnSidebar: $('#btn-sidebar'), btnShare: $('#btn-share')
       };
 
       const DEFAULTS = {
@@ -260,6 +267,7 @@
       let noise = makeValueNoise(Number(hashStr(state.seed)));
       let frame = 0, running = true;
       let particles = [];
+      let attractors = [];
 
       function hashStr(str) {
         let h = 2166136261;
@@ -287,6 +295,14 @@
             x: rng() * W, y: rng() * H,
             life: 0, hue: Math.floor(rng() * 360)
           });
+        }
+      }
+
+      function initAttractors(n = 3) {
+        attractors = [];
+        const rng = mulberry32(hashStr(state.seed) ^ 0x9e3779b9);
+        for (let i = 0; i < n; i++) {
+          attractors.push({ x: rng() * W, y: rng() * H, m: 200 + rng() * 600 });
         }
       }
 
@@ -356,6 +372,42 @@
         ctx.globalCompositeOperation = 'source-over';
       }
 
+      function drawOrbits() {
+        const drag = 0.98;
+        const g = 120; // gravitational constant-ish
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalCompositeOperation = 'lighter';
+        for (let s = 0; s < state.steps; s++) {
+          for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            let ax = 0, ay = 0;
+            for (let j = 0; j < attractors.length; j++) {
+              const a = attractors[j];
+              const dx = (a.x - p.x);
+              const dy = (a.y - p.y);
+              const d2 = Math.max(25, dx*dx + dy*dy);
+              const inv = a.m / d2;
+              ax += dx * inv; ay += dy * inv;
+            }
+            if (p.vx === undefined) { p.vx = 0; p.vy = 0; }
+            p.vx = (p.vx + ax * 0.001 * g) * drag;
+            p.vy = (p.vy + ay * 0.001 * g) * drag;
+            const nx = p.x + p.vx;
+            const ny = p.y + p.vy;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(nx, ny);
+            const speed = Math.min(1, Math.hypot(p.vx, p.vy) / 6);
+            ctx.strokeStyle = colorFromPalette(speed);
+            ctx.lineWidth = state.width;
+            ctx.stroke();
+            p.x = (nx + W) % W; p.y = (ny + H) % H; p.life++;
+          }
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
       function drawTerrain() {
         const img = ctx.createImageData(Math.floor(W), Math.floor(H));
         const data = img.data;
@@ -394,6 +446,9 @@
         } else if (state.mode === 'terrain') {
           // draw fully each frame when animating; otherwise only on regenerate
           drawTerrain();
+        } else if (state.mode === 'orbits') {
+          clearCanvas(false);
+          drawOrbits();
         }
       }
 
@@ -410,7 +465,8 @@
         noise = makeValueNoise(Number(hashStr(state.seed)));
         frame = 0;
         clearCanvas(true);
-        if (state.mode === 'flow') initParticles();
+        if (state.mode === 'flow' || state.mode === 'orbits') initParticles();
+        if (state.mode === 'orbits') initAttractors(3);
         render();
         saveState();
       }
@@ -461,10 +517,13 @@
 
       els.btnRandomize.addEventListener('click', () => { randomizeSeed(); });
       els.btnSave.addEventListener('click', () => savePNG());
+      els.btnSaveHD.addEventListener('click', () => saveHiRes());
       els.btnHelp.addEventListener('click', () => { help.style.display = help.style.display === 'none' ? 'block' : 'none'; });
       els.btnClear.addEventListener('click', () => clearCanvas(true));
       els.btnRegenerate.addEventListener('click', () => regenerate(true));
       els.btnReset.addEventListener('click', () => { state = { ...DEFAULTS }; applyStateToUI(); regenerate(true); });
+      els.btnSidebar && els.btnSidebar.addEventListener('click', () => { document.querySelector('.app').classList.toggle('sidebar-hidden'); });
+      els.btnShare && els.btnShare.addEventListener('click', async () => { const url = makeShareURL(); try { await navigator.clipboard.writeText(url); toast('Link copied to clipboard'); } catch { prompt('Copy link:', url); } });
 
       // Palette UI
       function setupPalettes() {
@@ -486,6 +545,138 @@
         link.download = `generative-${state.mode}-${ts}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
+      }
+
+      async function saveHiRes() {
+        const scaleStr = prompt('High-res scale (e.g., 2, 3, or 4). Or enter WxH like 3840x2160', '3');
+        if (!scaleStr) return;
+        let targetW = W, targetH = H;
+        let scale = 0;
+        const m = /^(\d+)x(\d+)$/i.exec(scaleStr.trim());
+        if (m) { targetW = parseInt(m[1], 10); targetH = parseInt(m[2], 10); }
+        else { scale = Math.max(1, Math.min(6, Number(scaleStr))); targetW = Math.floor(W * scale); targetH = Math.floor(H * scale); }
+
+        const off = document.createElement('canvas');
+        off.width = targetW; off.height = targetH;
+        const c2 = off.getContext('2d');
+        c2.setTransform(1,0,0,1,0,0);
+
+        function clear2(hard = false) {
+          if (hard) {
+            c2.save(); c2.fillStyle = state.bg; c2.fillRect(0,0,targetW,targetH); c2.restore();
+          } else {
+            c2.save(); c2.globalAlpha = Math.min(1, Math.max(0, state.fade)); c2.fillStyle = state.bg; c2.fillRect(0,0,targetW,targetH); c2.restore();
+          }
+        }
+
+        function drawFlow2() {
+          const scl = Math.max(2, Number(state.scale)) * (targetW/W + targetH/H)/2;
+          const speed = Number(state.speed);
+          c2.lineCap = 'round'; c2.lineJoin = 'round'; c2.globalCompositeOperation = 'lighter';
+          const rng = mulberry32(hashStr(state.seed));
+          const ps = [];
+          for (let i = 0; i < state.particles; i++) ps.push({ x: rng()*targetW, y: rng()*targetH, life: 0 });
+          const noise2 = makeValueNoise(Number(hashStr(state.seed)));
+          const stepsTotal = Math.max(120, 40 * state.steps);
+          for (let s = 0; s < stepsTotal; s++) {
+            for (let i = 0; i < ps.length; i++) {
+              const p = ps[i];
+              const n = noise2(p.x / scl, p.y / scl, s * 0.01);
+              const ang = n * Math.PI * 2;
+              const vx = Math.cos(ang) * speed;
+              const vy = Math.sin(ang) * speed;
+              const nx = p.x + vx, ny = p.y + vy;
+              c2.beginPath(); c2.moveTo(p.x, p.y); c2.lineTo(nx, ny);
+              const t = (Math.sin((p.life + i * 0.0003) * 0.02) * 0.5 + 0.5);
+              c2.strokeStyle = colorFromPalette(t);
+              c2.lineWidth = state.width; c2.stroke();
+              p.x = (nx + targetW) % targetW; p.y = (ny + targetH) % targetH; p.life++;
+            }
+          }
+          c2.globalCompositeOperation = 'source-over';
+        }
+
+        function drawTerrain2() {
+          const img = c2.createImageData(targetW, targetH);
+          const data = img.data;
+          const scl = Math.max(2, Number(state.scale));
+          const z = 0;
+          const pal = paletteColors().map(hex2rgb);
+          function sample(t) {
+            const i = Math.floor(t * (pal.length - 1));
+            const f = t * (pal.length - 1) - i;
+            const a = pal[i]; const b = pal[Math.min(i + 1, pal.length - 1)];
+            return [
+              Math.round(a[0] + (b[0] - a[0]) * f),
+              Math.round(a[1] + (b[1] - a[1]) * f),
+              Math.round(a[2] + (b[2] - a[2]) * f)
+            ];
+          }
+          const noise2 = makeValueNoise(Number(hashStr(state.seed)));
+          for (let y = 0; y < targetH; y++) {
+            for (let x = 0; x < targetW; x++) {
+              const t = noise2(x / scl, y / scl, z);
+              const c = sample(t);
+              const idx = (y * targetW + x) * 4;
+              data[idx] = c[0]; data[idx+1] = c[1]; data[idx+2] = c[2]; data[idx+3] = 255;
+            }
+          }
+          c2.putImageData(img, 0, 0);
+        }
+
+        function drawOrbits2() {
+          const drag = 0.98, g = 120;
+          c2.lineCap = 'round'; c2.lineJoin = 'round'; c2.globalCompositeOperation = 'lighter';
+          const rng = mulberry32(hashStr(state.seed));
+          const ps = [];
+          for (let i = 0; i < state.particles; i++) ps.push({ x: rng()*targetW, y: rng()*targetH, vx:0, vy:0, life:0 });
+          const rngA = mulberry32(hashStr(state.seed) ^ 0x9e3779b9);
+          const atts = []; for (let i=0;i<3;i++) atts.push({ x: rngA()*targetW, y: rngA()*targetH, m: 200 + rngA()*600 });
+          const stepsTotal = Math.max(120, 40 * state.steps);
+          for (let s = 0; s < stepsTotal; s++) {
+            for (let i = 0; i < ps.length; i++) {
+              const p = ps[i];
+              let ax = 0, ay = 0;
+              for (let j=0;j<atts.length;j++){
+                const a = atts[j]; const dx = a.x - p.x, dy = a.y - p.y; const d2 = Math.max(25, dx*dx + dy*dy); const inv = a.m / d2; ax += dx*inv; ay += dy*inv;
+              }
+              p.vx = (p.vx + ax * 0.001 * g) * drag; p.vy = (p.vy + ay * 0.001 * g) * drag;
+              const nx = p.x + p.vx, ny = p.y + p.vy;
+              c2.beginPath(); c2.moveTo(p.x, p.y); c2.lineTo(nx, ny);
+              const speed = Math.min(1, Math.hypot(p.vx, p.vy) / 6); c2.strokeStyle = colorFromPalette(speed); c2.lineWidth = state.width; c2.stroke();
+              p.x = (nx + targetW) % targetW; p.y = (ny + targetH) % targetH; p.life++;
+            }
+          }
+          c2.globalCompositeOperation = 'source-over';
+        }
+
+        // Render offscreen
+        // For trails, no fade to keep strong traces; background filled once
+        // Optionally, could interleave light fades for softness
+        if (state.mode === 'terrain') { drawTerrain2(); }
+        else {
+          clear2(true);
+          if (state.mode === 'flow') drawFlow2();
+          else if (state.mode === 'orbits') drawOrbits2();
+        }
+
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const link = document.createElement('a');
+        link.download = `generative-${state.mode}-${ts}-${targetW}x${targetH}.png`;
+        link.href = off.toDataURL('image/png');
+        link.click();
+      }
+
+      function toast(msg) {
+        hud.textContent = msg;
+        setTimeout(() => { hud.textContent = `${W}×${H} • ${state.mode} • seed ${state.seed}`; }, 1400);
+      }
+
+      function makeShareURL() {
+        const url = new URL(location.href);
+        const s = { ...state };
+        Object.keys(s).forEach(k => url.searchParams.set(k, s[k]));
+        return url.toString();
       }
 
       function saveState() {
@@ -514,10 +705,25 @@
 
       // Lifecycle
       window.addEventListener('resize', () => regenerate(false));
+      // Load from URL params if present
+      try {
+        const usp = new URLSearchParams(location.search);
+        if ([...usp.keys()].length) {
+          const merged = { ...state };
+          usp.forEach((v,k) => {
+            if (k in merged) {
+              if (['particles','steps'].includes(k)) merged[k] = parseInt(v,10);
+              else if (['scale','speed','width','fade','paletteIndex'].includes(k)) merged[k] = Number(v);
+              else merged[k] = v;
+            }
+          });
+          state = merged;
+          applyStateToUI();
+        }
+      } catch {}
       regenerate(true);
       running = true;
       loop();
     </script>
   </body>
   </html>
-

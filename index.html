@@ -129,6 +129,7 @@
           <button id="btn-randomize" class="btn">Randomize</button>
           <button id="btn-save" class="btn">Save PNG</button>
           <button id="btn-save-hd" class="btn">Save Hi-Res</button>
+          <button id="btn-fullscreen" class="btn ghost hide-mobile">Fullscreen</button>
           <button id="btn-help" class="btn ghost hide-mobile">Help</button>
         </div>
       </header>
@@ -141,6 +142,7 @@
               <option value="flow">Flow Field (trails)</option>
               <option value="terrain">Noise Terrain</option>
               <option value="orbits">Orbits (gravity)</option>
+              <option value="hex">Hex Mosaic</option>
             </select>
           </div>
           <div class="row">
@@ -148,6 +150,15 @@
             <select id="animate">
               <option value="on">On</option>
               <option value="off">Off</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="blend">Blend Mode</label>
+            <select id="blend">
+              <option value="lighter">lighter</option>
+              <option value="source-over">source-over</option>
+              <option value="screen">screen</option>
+              <option value="overlay">overlay</option>
             </select>
           </div>
         </div>
@@ -176,6 +187,8 @@
             <button id="btn-regenerate" class="btn">Regenerate</button>
             <button id="btn-reset" class="btn">Reset Defaults</button>
             <button id="btn-share" class="btn">Copy Link</button>
+            <button id="btn-export" class="btn">Export JSON</button>
+            <button id="btn-import" class="btn">Import JSON</button>
           </div>
         </div>
       </aside>
@@ -250,13 +263,13 @@
         mode: $('#mode'), animate: $('#animate'), seed: $('#seed'),
         particles: $('#particles'), steps: $('#steps'), scale: $('#scale'), speed: $('#speed'), width: $('#width'), fade: $('#fade'),
         bg: $('#bg'), swatches: $('#swatches'),
-        btnRandomize: $('#btn-randomize'), btnSave: $('#btn-save'), btnSaveHD: $('#btn-save-hd'), btnHelp: $('#btn-help'), btnClear: $('#btn-clear'), btnRegenerate: $('#btn-regenerate'), btnReset: $('#btn-reset'), btnSidebar: $('#btn-sidebar'), btnShare: $('#btn-share')
+        btnRandomize: $('#btn-randomize'), btnSave: $('#btn-save'), btnSaveHD: $('#btn-save-hd'), btnHelp: $('#btn-help'), btnClear: $('#btn-clear'), btnRegenerate: $('#btn-regenerate'), btnReset: $('#btn-reset'), btnSidebar: $('#btn-sidebar'), btnShare: $('#btn-share'), btnExport: $('#btn-export'), btnImport: $('#btn-import'), btnFullscreen: $('#btn-fullscreen')
       };
 
       const DEFAULTS = {
         mode: 'flow', animate: 'on', seed: String(Math.floor(Math.random() * 1e9)),
         particles: 4000, steps: 3, scale: 120, speed: 1.2, width: 0.7, fade: 0.03,
-        bg: '#060a12', paletteIndex: 0
+        bg: '#060a12', paletteIndex: 0, blend: 'lighter'
       };
 
       let state = loadState();
@@ -349,7 +362,7 @@
         const speed = Number(state.speed);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalCompositeOperation = state.blend || 'lighter';
         for (let s = 0; s < state.steps; s++) {
           for (let i = 0; i < particles.length; i++) {
             const p = particles[i];
@@ -377,7 +390,7 @@
         const g = 120; // gravitational constant-ish
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalCompositeOperation = state.blend || 'lighter';
         for (let s = 0; s < state.steps; s++) {
           for (let i = 0; i < particles.length; i++) {
             const p = particles[i];
@@ -438,6 +451,38 @@
         ctx.putImageData(img, 0, 0);
       }
 
+      function drawHex() {
+        const tile = Math.max(6, Math.floor(state.scale)); // reuse scale as tile size
+        const w = tile * 2;
+        const h = Math.sqrt(3) * tile;
+        const cols = Math.ceil(W / (w * 0.75)) + 2;
+        const rows = Math.ceil(H / h) + 2;
+        const pal = paletteColors();
+        ctx.save();
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const x = c * w * 0.75 + ((r % 2) * w * 0.375);
+            const y = r * h * 0.5;
+            const t = noise((x + frame * 4) / (tile * 8), (y + frame * 4) / (tile * 8), 0);
+            ctx.fillStyle = colorFromPalette(t);
+            polygonHex(x, y, tile - 1);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+
+      function polygonHex(cx, cy, r) {
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = Math.PI / 3 * i + Math.PI / 6;
+          const x = cx + Math.cos(a) * r;
+          const y = cy + Math.sin(a) * r;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+      }
+
       function render() {
         hud.textContent = `${W}×${H} • ${state.mode} • seed ${state.seed}`;
         if (state.mode === 'flow') {
@@ -449,13 +494,25 @@
         } else if (state.mode === 'orbits') {
           clearCanvas(false);
           drawOrbits();
+        } else if (state.mode === 'hex') {
+          clearCanvas(true);
+          drawHex();
         }
       }
 
+      let fpsLast = performance.now();
+      let fpsFrames = 0;
       function loop() {
         if (running && state.animate === 'on') {
           frame++;
           render();
+        }
+        fpsFrames++;
+        const now = performance.now();
+        if (now - fpsLast >= 1000) {
+          const fps = Math.round((fpsFrames * 1000) / (now - fpsLast));
+          hud.textContent = `${W}×${H} • ${state.mode} • seed ${state.seed} • ${fps} fps`;
+          fpsFrames = 0; fpsLast = now;
         }
         requestAnimationFrame(loop);
       }
@@ -489,6 +546,7 @@
         els.width.value = state.width;
         els.fade.value = state.fade;
         els.bg.value = state.bg;
+        if (els.blend) els.blend.value = state.blend || 'lighter';
       }
 
       function readUIToState() {
@@ -502,6 +560,7 @@
         state.width = Number(els.width.value);
         state.fade = Number(els.fade.value);
         state.bg = els.bg.value;
+        state.blend = (document.querySelector('#blend')?.value) || state.blend || 'lighter';
       }
 
       function onChange() {
@@ -509,7 +568,7 @@
         regenerate(false);
       }
 
-      ['mode','animate','seed','particles','steps','scale','speed','width','fade','bg'].forEach(id => {
+      ['mode','animate','seed','particles','steps','scale','speed','width','fade','bg','blend'].forEach(id => {
         const el = els[id];
         el.addEventListener('input', onChange);
         el.addEventListener('change', onChange);
@@ -524,6 +583,27 @@
       els.btnReset.addEventListener('click', () => { state = { ...DEFAULTS }; applyStateToUI(); regenerate(true); });
       els.btnSidebar && els.btnSidebar.addEventListener('click', () => { document.querySelector('.app').classList.toggle('sidebar-hidden'); });
       els.btnShare && els.btnShare.addEventListener('click', async () => { const url = makeShareURL(); try { await navigator.clipboard.writeText(url); toast('Link copied to clipboard'); } catch { prompt('Copy link:', url); } });
+      els.btnExport && els.btnExport.addEventListener('click', async () => {
+        const txt = JSON.stringify(state, null, 2);
+        try { await navigator.clipboard.writeText(txt); toast('Settings copied'); }
+        catch { prompt('Copy settings JSON:', txt); }
+      });
+      els.btnImport && els.btnImport.addEventListener('click', async () => {
+        const txt = prompt('Paste settings JSON:');
+        if (!txt) return;
+        try {
+          const obj = JSON.parse(txt);
+          state = { ...DEFAULTS, ...state, ...obj };
+          applyStateToUI();
+          regenerate(true);
+          toast('Settings applied');
+        } catch { alert('Invalid JSON'); }
+      });
+      els.btnFullscreen && els.btnFullscreen.addEventListener('click', async () => {
+        const el = document.documentElement;
+        if (!document.fullscreenElement) { try { await el.requestFullscreen(); } catch {} }
+        else { try { await document.exitFullscreen(); } catch {} }
+      });
 
       // Palette UI
       function setupPalettes() {
@@ -701,6 +781,12 @@
         else if (e.key.toLowerCase() === 'g') { e.preventDefault(); regenerate(true); }
         else if (e.key.toLowerCase() === 'p') { e.preventDefault(); state.paletteIndex = (state.paletteIndex + 1) % PALETTES.length; setupPalettes(); regenerate(false); saveState(); }
         else if (e.key.toLowerCase() === 'h') { e.preventDefault(); help.style.display = help.style.display === 'none' ? 'block' : 'none'; }
+      });
+
+      canvas.addEventListener('click', () => {
+        state.animate = state.animate === 'on' ? 'off' : 'on';
+        els.animate.value = state.animate;
+        saveState();
       });
 
       // Lifecycle

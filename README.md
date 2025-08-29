@@ -12,10 +12,14 @@
 **Screenshots**
 - Flow Field: `assets/screenshot-flow.svg`
 - Noise Terrain: `assets/screenshot-terrain.svg`
+- Orbits: `assets/screenshot-orbits.svg`
+- Hex Mosaic: `assets/screenshot-hex.svg`
 
 The repo includes a workflow that generates real PNG screenshots on push and replaces these placeholders with:
 - `assets/screenshot-flow.png`
 - `assets/screenshot-terrain.png`
+- `assets/screenshot-orbits.png`
+- `assets/screenshot-hex.png`
 
 **Local Usage**
 - Open `index.html` in a modern browser.

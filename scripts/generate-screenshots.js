@@ -41,6 +41,22 @@ async function main() {
   await page.waitForTimeout(1200);
   await page.screenshot({ path: path.join(outDir, 'screenshot-terrain.png') });
 
+  // Orbits screenshot
+  await page.evaluate(() => {
+    const mode = document.querySelector('#mode');
+    if (mode) { mode.value = 'orbits'; mode.dispatchEvent(new Event('input')); mode.dispatchEvent(new Event('change')); }
+  });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: path.join(outDir, 'screenshot-orbits.png') });
+
+  // Hex screenshot
+  await page.evaluate(() => {
+    const mode = document.querySelector('#mode');
+    if (mode) { mode.value = 'hex'; mode.dispatchEvent(new Event('input')); mode.dispatchEvent(new Event('change')); }
+  });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: path.join(outDir, 'screenshot-hex.png') });
+
   await browser.close();
 }
 
@@ -48,4 +64,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
